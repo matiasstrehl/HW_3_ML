@@ -1,0 +1,176 @@
+---
+title: "Homework 3 Machine Learning"
+author: "Matias Strehl"
+date: "2022-10-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r start, message = F, warning = F}
+#install.packages("discrim")
+#install.packages("corrplot")
+#install.packages("klaR")
+library(tidyverse)
+library(tidymodels)
+library(discrim)
+library(corrplot)
+library(klaR)
+
+set.seed(17)
+
+titanic <- read.csv("data/titanic.csv")
+
+titanic$survived <- as.factor(titanic$survived) 
+titanic$pclass <- as.factor(titanic$pclass)
+
+```
+## Question 1 
+
+```{r, message = F, warning = F}
+titanic_split <- initial_split(titanic, prop = 0.80, strata = survived)
+titanic_train <- training(titanic_split)
+titanic_test  <- testing(titanic_split)
+
+#Does the training and test sets have the appropriate number of observations?
+nrow(titanic_train) #712 =  80% of 891
+nrow(titanic_test) #179 = 20% of 891
+
+# Looking for number of missing observations
+round((colMeans(is.na(titanic_train)))*100, 2)
+```
+
+First, it is a good idea to use stratified sample here so we balance the number of people to survived (and not survived) in each sample when we split the data.
+
+We observe that the training and testing sets have the right number of observation (712 and 179 observations, which correspond to 80% and 20%, respectively).
+
+Finally, we observe that the variables cabin, age and embarked have a large number of missing observations.
+
+## Question 2 
+
+```{r, message = F, warning = F}
+titanic_train %>% 
+  ggplot(aes(x = survived, y = (..count..)/sum(..count..))) +
+  geom_bar(fill = "coral")+
+  scale_y_continuous(labels=scales::percent) +
+  theme_bw()
+
+# Table 
+titanic_train %>% 
+  count(survived)
+```
+
+The distribution of the variable "survived" in the training set shows that approximately 60% did not survive.
+
+## Question 3
+
+```{r, message = F, warning = F, results='asis'}
+titanic_train_matrix <- drop_na(titanic_train) 
+
+corrplot(cor(titanic_train_matrix %>% dplyr:: select(passenger_id, sib_sp, parch, fare,age)) ,method = 'circle', type = 'lower', insig='blank', addCoef.col ='black', number.cex = 0.8, order = 'AOE', diag=FALSE)
+
+```
+
+First, we drop all the observations that have any missing value in the variables of interest. Then, based on the correlation matrix, we observe that "parche" and "fare" are positively correlated (number of parents or children and price of fare, respectively). Also, "parch" is positively correlated with "sib_sp", which corresponds to the number of sibilings or spouses aboard. Besides, this last variable is also positively correlated with "fare" and, finally, "parch" is negatively correlated with "age". The rest of the variables don't seem to be strongly correlated.
+
+## Question 4
+
+```{r, message = F, warning = F}
+titanic_recipe <- recipe(survived ~ pclass + sex + age + sib_sp + parch + fare, data = titanic_train) %>%
+  step_impute_linear(age, impute_with = imp_vars(pclass,sex)) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_interact(terms = ~ starts_with("sex"):fare) %>%
+  step_interact(terms = ~ age:fare)
+```
+
+## Question 5
+
+```{r, message = F, warning = F}
+logit_model <- logistic_reg() %>% set_engine("glm") %>% set_mode("classification")
+
+logit_workflow <- workflow() %>%  add_model(logit_model) %>%  add_recipe(titanic_recipe)
+
+logit_fit <- fit(logit_workflow, titanic_train)
+
+logit_fit %>% tidy()
+
+```
+
+## Question 6
+
+```{r, message = F, warning = F}
+lda_model <- discrim_linear()  %>% set_mode("classification") %>% set_engine("MASS")
+
+lda_workflow <- workflow() %>%  add_model(lda_model) %>%  add_recipe(titanic_recipe)
+
+lda_fit <- fit(lda_workflow, titanic_train)
+
+```
+
+## Question 7
+
+```{r, message = F, warning = F}
+qda_model <- discrim_quad()  %>% set_mode("classification") %>% set_engine("MASS")
+
+qda_workflow <- workflow() %>%  add_model(qda_model) %>%  add_recipe(titanic_recipe)
+
+qda_fit <- fit(qda_workflow, titanic_train)
+
+```
+
+## Question 8
+
+```{r, message = F, warning = F}
+nb_model <- naive_Bayes() %>% set_mode("classification") %>% set_engine("klaR") %>% set_args(usekernel = FALSE)
+
+nb_workflow <- workflow() %>% add_model(nb_model) %>% add_recipe(titanic_recipe)
+
+nb_fit <- fit(nb_workflow, titanic_train)
+```
+
+## Question 9
+
+```{r, message = F, warning = F}
+#Prediction
+logit_pred <-predict(logit_fit, new_data = titanic_train, , type = "prob")
+lda_pred <-predict(lda_fit, new_data = titanic_train, , type = "prob")
+qda_pred <-predict(qda_fit, new_data = titanic_train, , type = "prob")
+nb_pred <-predict(nb_fit, new_data = titanic_train, , type = "prob")
+
+#Accuracy
+logit_acc <- augment(logit_fit, new_data = titanic_train) %>% accuracy(truth = survived, estimate = .pred_class)
+lda_acc <- augment(lda_fit, new_data = titanic_train) %>% accuracy(truth = survived, estimate = .pred_class)
+qda_acc <- augment(qda_fit, new_data = titanic_train) %>% accuracy(truth = survived, estimate = .pred_class)
+nb_acc <- augment(nb_fit, new_data = titanic_train) %>% accuracy(truth = survived, estimate = .pred_class)
+
+accuracies <- c(logit_acc$.estimate, lda_acc$.estimate, qda_acc$.estimate , nb_acc$.estimate)
+models <- c("Logistic Regression", "LDA", "QDA", "Naive Bayes")
+results <- tibble(accuracies = accuracies, models = models) %>% arrange(-accuracies)
+results
+```
+From the table we can see that the Logistic Regression has the highest accuracy among these 4 models.
+
+## Question 10
+
+```{r, message = F, warning = F}
+#Since logit has the highest accuracy from the training set, I will fit logit with the test set
+logit_pred_test <- predict(logit_fit, new_data = titanic_test, type = "prob")
+logit_acc_test  <- augment(logit_fit, new_data = titanic_test) %>% accuracy(truth = survived, estimate = .pred_class)
+logit_acc_test
+
+#creating and visualizing the confusion matrix
+augment(logit_fit, new_data = titanic_test) %>% conf_mat(truth = survived, estimate = .pred_class) %>% autoplot(type = "heatmap")
+
+#ROC curve
+augment(logit_fit, new_data = titanic_test) %>%
+  roc_curve(survived, .pred_No) %>%
+  autoplot()
+#Area under the ROC curve
+augment(logit_fit, new_data = titanic_test) %>%
+  roc_auc(survived, .pred_No) 
+```
+
+The test accuracy of the model is lower than in the train accuracy. This is expected since the model was trained with the training data, not the testing data. Finally, the area under the ROC curve is 0.84.
