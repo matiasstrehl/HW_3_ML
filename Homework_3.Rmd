@@ -174,3 +174,30 @@ augment(logit_fit, new_data = titanic_test) %>%
 ```
 
 The test accuracy of the model is lower than in the train accuracy. This is expected since the model was trained with the training data, not the testing data. Finally, the area under the ROC curve is 0.84.
+
+## Question 11
+$p = \frac{e^z}{1+e^z}$. First, by multiplying both sides by $(\frac{1}{1-p})$ and taking the log, we get:
+$ln(\frac{p}{1-p}) = ln[\frac{e^z}{(1-p)(1+e^z)}]$. Second, plugging the value of p, we get:
+
+$$ln(\frac{p}{1-p}) = ln[\frac{e^z}{(1-(\frac{e^z}{1+e^z}))(1+e^z)}] $$
+Simplifying:
+$$ln(\frac{p}{1-p}) = z$$. 
+
+
+## Question 12
+
+Odds are equal to $\frac{p}{1-p} = exp\{\beta_0 + \beta_1x_1\}$. So the derivative in terms of $x_1$ is.
+
+$$change\{odds\} = \beta_1exp\{\beta_0 + \beta_1x_1\}$$
+Therefore, if $x_1$ increases by 2, the odds increases by $\beta_1exp\{\beta_0 + \beta_1(2)\}$.
+
+
+The formula for p is: 
+$$p = \frac{exp\{\beta_0 + \beta_1x_1)\}}{1+exp\{\beta_0 + \beta_1x_1\}} = \frac{1}{\frac{1}{exp\{(\beta_0 + \beta_1x_1)\}} + 1}$$
+
+
+Thus, since $\beta$ is negative we have that:
+as $x_1$ approaches $\infty$, p approaches 0, and as $x_1$ approaches $-\infty$, p approaches 1, which make sense since it is a probability.
+
+
+
